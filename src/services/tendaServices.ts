@@ -4,7 +4,7 @@ import {
   successResponse,
 } from "../types/response.ts";
 import { toggleGuestWiFiRequest } from "../types/request.ts";
-import { ENV_VARIABLES } from "./../constants/constants.ts";
+import { ENV_VARIABLES } from "../constants/constants.ts";
 import logger from "../utils/logger.ts";
 import TendaClient from "./tendaClient.ts";
 import { Request, Response } from "npm:express@4.19.2";
