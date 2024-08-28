@@ -12,6 +12,9 @@ import { Request, Response } from "npm:express@4.19.2";
 class TendaServices {
   private client;
   constructor() {
+    if (!ENV_VARIABLES.HOST && !ENV_VARIABLES.PASSWORD)
+      throw new Error("Environment variables not found!");
+    
     this.client = new TendaClient(ENV_VARIABLES.HOST, ENV_VARIABLES.PASSWORD);
   }
 

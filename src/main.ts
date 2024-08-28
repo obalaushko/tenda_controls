@@ -1,13 +1,10 @@
-import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 import logger from "./utils/logger.ts";
 import express from "npm:express@4.19.2";
 // import { getFreePort } from "https://deno.land/x/free_port@v1.2.0/mod.ts";
 import router from "./server/router.ts";
 
-await load({ export: true, allowEmptyValues: true });
-
 // const PORT = await getFreePort(3001);
-const PORT = 3001
+const PORT = 3001;
 
 logger.info("Start tenda controls...");
 
