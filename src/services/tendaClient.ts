@@ -39,7 +39,7 @@ class TendaClient {
     options?: RequestInit
   ): Promise<{ data: any; response: Response }> {
     if (!this.cookie) {
-      logger.info("No cookie found, initiating login");
+      logger.warn("No cookie found, initiating login");
       await this.auth();
 
       if (!this.cookie) {
@@ -175,6 +175,7 @@ class TendaClient {
       );
 
       if (response.ok) {
+        logger.info(`[toggleGuestWiFiClient]: Guest wifi: ${enable}`);
         return { wifiStatus: enable };
       } else {
         return null;
@@ -195,6 +196,8 @@ class TendaClient {
       const guestUsers = data.filter(
         (user: IUser) => user.isGuestClient === "true"
       );
+
+      logger.info(`[getGuestWiFiUsersClient]: Guest users - ${guestUsers}`);
 
       return guestUsers;
     } catch (error) {
