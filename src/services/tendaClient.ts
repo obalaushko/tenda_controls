@@ -110,7 +110,7 @@ class TendaClient {
     }
   }
 
-  async toggleGuestWiFi(enable: boolean): Promise<boolean> {
+  async toggleGuestWiFiClient(enable: boolean): Promise<boolean> {
     await this.auth();
     try {
       const data = new URLSearchParams({
@@ -138,13 +138,13 @@ class TendaClient {
         return true;
       }
     } catch (error) {
-      logger.error("Error [toggleGuestWiFi]: ", error);
+      logger.error("Error [toggleGuestWiFiClient]: ", error);
       return false;
     }
     return false;
   }
 
-  async getGuestWiFiStatus(): Promise<IGuestWifiStatus | null> {
+  async getGuestWiFiStatusClient(): Promise<IGuestWifiStatus | null> {
     await this.auth();
 
     try {
@@ -173,18 +173,17 @@ class TendaClient {
 
         return { guestWifiEnabled, guestWifi5gEnabled };
       } else {
-        const text = await response.text();
-        logger.info(`Response is not JSON: ${text}`);
+        logger.warn(`Response is not JSON ${response}`);
 
         return null;
       }
     } catch (error) {
-      logger.error("Error [getGuestWiFiStatus]: ", error);
+      logger.error("Error [getGuestWiFiStatusClient]: ", error);
       return null;
     }
   }
 
-  async getGuestWiFiUsers(): Promise<IUser[] | null> {
+  async getGuestWiFiUsersClient(): Promise<IUser[] | null> {
     await this.auth();
     try {
       const response = await this.request(
@@ -200,14 +199,13 @@ class TendaClient {
 
         return guestUsers;
       } catch (error) {
-        const text = await response.text();
+        logger.warn(`Response is not JSON ${response}`);
 
-        logger.warn(`Response is not JSON: ${text}`);
         logger.error(error);
         return null;
       }
     } catch (error) {
-      logger.error("Error [getGuestWiFiUsers]: ", error);
+      logger.error("Error [getGuestWiFiUsersClient]: ", error);
       return null;
     }
   }
@@ -225,9 +223,8 @@ class TendaClient {
 
         return users;
       } catch (error) {
-        const text = await response.text();
+        logger.warn(`Response is not JSON ${response}`);
 
-        logger.warn(`Response is not JSON: ${text}`);
         logger.error(error);
         return null;
       }

@@ -25,7 +25,7 @@ class TendaServices {
     try {
       const { turnOnWifi } = req.body;
 
-      const toggleGuestWifi = await this.client.toggleGuestWiFi(turnOnWifi);
+      const toggleGuestWifi = await this.client.toggleGuestWiFiClient(turnOnWifi);
 
       if (toggleGuestWifi) {
         return res.status(200).json(successResponse({ data: toggleGuestWifi }));
@@ -48,7 +48,7 @@ class TendaServices {
     res: Response<ResponseBody>
   ) {
     try {
-      const wifiStatus = await this.client.getGuestWiFiStatus();
+      const wifiStatus = await this.client.getGuestWiFiStatusClient();
 
       if (wifiStatus) {
         return res.status(200).json(
@@ -75,7 +75,7 @@ class TendaServices {
     res: Response<ResponseBody>
   ) {
     try {
-      const guestWifiUsers = await this.client.getGuestWiFiUsers();
+      const guestWifiUsers = await this.client.getGuestWiFiUsersClient();
 
       if (guestWifiUsers) {
         return res.status(200).json(
