@@ -136,12 +136,13 @@ class TendaClient {
       );
       if (response.ok) {
         return true;
+      } else {
+        return false;
       }
     } catch (error) {
       logger.error("Error [toggleGuestWiFiClient]: ", error);
       return false;
     }
-    return false;
   }
 
   async getGuestWiFiStatusClient(): Promise<IGuestWifiStatus | null> {
@@ -173,7 +174,9 @@ class TendaClient {
 
         return { guestWifiEnabled, guestWifi5gEnabled };
       } else {
-        logger.warn(`Response is not JSON ${response}`);
+        logger.warn(
+          `[getGuestWiFiStatusClient] Response is not JSON ${response}`
+        );
 
         return null;
       }
@@ -191,17 +194,18 @@ class TendaClient {
         { method: "GET" }
       );
 
-      try {
+      if (response.ok) {
         const users = await response.json();
         const guestUsers = users.filter(
           (user: IUser) => user.isGuestClient === "true"
         );
 
         return guestUsers;
-      } catch (error) {
-        logger.warn(`Response is not JSON ${response}`);
+      } else {
+        logger.warn(
+          `[getGuestWiFiUsersClient] Response is not JSON ${response}`
+        );
 
-        logger.error(error);
         return null;
       }
     } catch (error) {
