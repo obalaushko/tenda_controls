@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any
 import logger from "../utils/logger.ts";
 import { Md5 } from "https://deno.land/std@0.122.0/hash/md5.ts";
 
@@ -21,135 +22,105 @@ class TendaClient {
   private readonly host: string;
   private readonly password: string;
   private readonly headers: Headers;
-  private isLoggined: boolean;
   private cookie: string | null = null;
   private retryCount: number = 0;
   private maxRetries: number = 3;
 
   constructor(host: string, password: string) {
-    this.isLoggined = false;
     this.host = host;
     this.password = new Md5().update(password).toString();
     this.headers = new Headers({
       "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
     });
-    logger.info(`HOST - ${this.host}, PASSWORD - ${this.password}`);
   }
 
-  private async request(url: string, options?: RequestInit): Promise<Response> {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...options?.headers,
-        ...(this.cookie ? { Cookie: this.cookie } : {}),
-      },
-    });
+  private async request(
+    url: string,
+    options?: RequestInit
+  ): Promise<{ data: any; response: Response }> {
+    if (!this.cookie) {
+      logger.info("No cookie found, initiating login");
+      await this.auth();
 
-    if (!response.ok && response.status !== 302) {
-      logger.error(`Error: ${response.status} ${response.statusText}`);
-      throw new Error(`Request failed with status ${response.status}`);
+      if (!this.cookie) {
+        throw new Error("Failed to authenticate and retrieve cookie");
+      }
     }
 
-    // Save cookie
-    const setCookie = response.headers.get("Set-Cookie");
-    if (setCookie) {
-      this.cookie = setCookie;
-    }
+    const performRequest = async (): Promise<{
+      data: any;
+      response: Response;
+    }> => {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...options?.headers,
+          ...(this.cookie ? { Cookie: this.cookie } : {}),
+        },
+      });
 
-    return response;
+      if (!response.ok) {
+        logger.error(`Error: ${response.status} ${response.statusText}`);
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (_e) {
+        logger.warn(
+          "Failed to parse JSON response, likely logged out. Retrying login..."
+        );
+        await this.auth();
+
+        return await performRequest();
+      }
+
+      return { data, response };
+    };
+
+    return await performRequest();
   }
 
-  private async auth() {
+  private async auth(): Promise<boolean> {
     try {
       if (this.retryCount >= this.maxRetries) {
         throw new Error(`Maximum login attempts reached (${this.maxRetries})`);
       }
-
       const data = `username=admin&password=${this.password}`;
-      const requestToLogin = await this.request(
-        `http://${this.host}/login/Auth`,
-        {
-          method: "POST",
-          headers: this.headers,
-          body: data,
-          redirect: "manual",
-        }
-      );
+      const response = await fetch(`http://${this.host}/login/Auth`, {
+        method: "POST",
+        body: data,
+        redirect: "manual",
+        headers: {
+          ...this.headers,
+          ...(this.cookie ? { Cookie: this.cookie } : {}),
+        },
+      });
 
-      if (requestToLogin.status === 302) {
-        const redirectUrl = requestToLogin.headers.get("Location") ?? "";
+      const setCookie = response.headers.get("Set-Cookie");
 
-        if (redirectUrl.includes("main.html")) {
-          logger.info("Authorization successful, redirected to main page");
+      if (setCookie) {
+        this.cookie = setCookie;
+        logger.info("Login is successful!");
 
-          const redirectRequest = await this.request(redirectUrl);
-          //   logger.info("Redirect response", redirectRequest);
-
-          // Check if redirect to main page
-          if (redirectRequest.url.includes("main.html")) {
-            this.isLoggined = true;
-            logger.info("Logged in successfully");
-
-            this.retryCount = 0; // reset count if success
-          } else {
-            logger.warn(
-              "Redirection did not lead to main page, login might have failed"
-            );
-          }
-        } else if (redirectUrl.includes("login.html")) {
-          this.retryCount++;
-          logger.info(`Retrying login (${this.retryCount}/${this.maxRetries})`);
-
-          await this.auth(); // Recursively called if authorization failed
-        }
+        this.retryCount = 0; // reset count
+        return true;
       } else {
-        throw new Error("Authentication failed");
+        this.retryCount++;
+        logger.info(`Retrying login (${this.retryCount}/${this.maxRetries})`);
+
+        return await this.auth();
       }
     } catch (error) {
       logger.error(`Error in auth(): ${error}`);
-    }
-  }
-
-  async toggleGuestWiFiClient(enable: boolean): Promise<boolean> {
-    await this.auth();
-    try {
-      const data = new URLSearchParams({
-        guestEn: enable ? "1" : "0",
-        guestEn_5g: enable ? "1" : "0",
-        guestSecurity: "wpapsk",
-        guestSecurity_5g: "wpapsk",
-        guestSsid: "Free WiFi 2.4G",
-        guestSsid_5g: "Free WiFi 5G",
-        guestWrlPwd: "",
-        guestWrlPwd_5g: "",
-        effectiveTime: "0",
-        shareSpeed: "6400",
-      }).toString();
-
-      const response = await this.request(
-        `http://${this.host}/goform/WifiGuestSet`,
-        {
-          method: "POST",
-          headers: this.headers,
-          body: data,
-        }
-      );
-      if (response.ok) {
-        return true;
-      } else {
-        return false;
-      }
-    } catch (error) {
-      logger.error("Error [toggleGuestWiFiClient]: ", error);
       return false;
     }
   }
 
   async getGuestWiFiStatusClient(): Promise<IGuestWifiStatus | null> {
-    await this.auth();
-
     try {
-      const response = await this.request(
+      const { data } = await this.request(
         `http://${this.host}/goform/WifiGuestGet`,
         {
           method: "GET",
@@ -160,80 +131,75 @@ class TendaClient {
         }
       );
 
-      if (response.ok) {
-        const status = await response.json();
-        const guestWifiEnabled = status.guestEn === "1";
-        const guestWifi5gEnabled = status.guestEn_5g === "1";
+      const guestWifiEnabled = data.guestEn === "1";
+      const guestWifi5gEnabled = data.guestEn_5g === "1";
 
-        logger.info(
-          `Guest WiFi 2.4G is ${guestWifiEnabled ? "enabled" : "disabled"}`
-        );
-        logger.info(
-          `Guest WiFi 5G is ${guestWifi5gEnabled ? "enabled" : "disabled"}`
-        );
+      logger.info(
+        `Guest WiFi 2.4G is ${guestWifiEnabled ? "enabled" : "disabled"}`
+      );
+      logger.info(
+        `Guest WiFi 5G is ${guestWifi5gEnabled ? "enabled" : "disabled"}`
+      );
 
-        return { guestWifiEnabled, guestWifi5gEnabled };
-      } else {
-        logger.warn(
-          `[getGuestWiFiStatusClient] Response is not JSON ${response}`
-        );
-
-        return null;
-      }
+      return { guestWifiEnabled, guestWifi5gEnabled };
     } catch (error) {
       logger.error("Error [getGuestWiFiStatusClient]: ", error);
       return null;
     }
   }
 
-  async getGuestWiFiUsersClient(): Promise<IUser[] | null> {
-    await this.auth();
+  async toggleGuestWiFiClient(
+    enable: boolean
+  ): Promise<{ wifiStatus: boolean } | null> {
     try {
-      const response = await this.request(
-        `http://${this.host}/goform/getOnlineList`,
-        { method: "GET" }
+      const data = new URLSearchParams({
+        guestEn: enable ? "1" : "0",
+        guestEn_5g: enable ? "1" : "0",
+        guestSecurity: "wpapsk",
+        guestSecurity_5g: "wpapsk",
+        guestSsid: "Free WiFi 2.4G",
+        guestSsid_5g: "Free WiFi 5G",
+        guestWrlPwd: "",
+        guestWrlPwd_5g: "",
+        effectiveTime: "8",
+        shareSpeed: "6400",
+      }).toString();
+
+      const { response } = await this.request(
+        `http://${this.host}/goform/WifiGuestSet`,
+        {
+          method: "POST",
+          headers: this.headers,
+          body: data,
+        }
       );
 
       if (response.ok) {
-        const users = await response.json();
-        const guestUsers = users.filter(
-          (user: IUser) => user.isGuestClient === "true"
-        );
-
-        return guestUsers;
+        return { wifiStatus: enable };
       } else {
-        logger.warn(
-          `[getGuestWiFiUsersClient] Response is not JSON ${response}`
-        );
-
         return null;
       }
     } catch (error) {
-      logger.error("Error [getGuestWiFiUsersClient]: ", error);
-      return null;
+      logger.error("Error [toggleGuestWiFiClient]: ", error);
+      throw new Error("[toggleGuestWiFiClient]", error);
     }
   }
 
-  async getWiFiUsers() {
-    await this.auth();
+  async getGuestWiFiUsersClient(): Promise<IUser[] | null> {
     try {
-      const response = await this.request(
+      const { data } = await this.request(
         `http://${this.host}/goform/getOnlineList`,
         { method: "GET" }
       );
 
-      try {
-        const users = await response.json();
+      const guestUsers = data.filter(
+        (user: IUser) => user.isGuestClient === "true"
+      );
 
-        return users;
-      } catch (error) {
-        logger.warn(`Response is not JSON ${response}`);
-
-        logger.error(error);
-        return null;
-      }
+      return guestUsers;
     } catch (error) {
-      logger.error("Error [getWiFiUsers]: ", error);
+      logger.error("Error [getGuestWiFiUsersClient]: ", error);
+      return null;
     }
   }
 }
