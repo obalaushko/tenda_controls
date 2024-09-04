@@ -14,7 +14,7 @@ class TendaServices {
   constructor() {
     if (!ENV_VARIABLES.HOST && !ENV_VARIABLES.PASSWORD)
       throw new Error("Environment variables not found!");
-    
+
     this.client = new TendaClient(ENV_VARIABLES.HOST, ENV_VARIABLES.PASSWORD);
   }
 
@@ -25,8 +25,9 @@ class TendaServices {
     try {
       const { turnOnWifi } = req.body;
 
-      const toggleGuestWifi = await this.client.toggleGuestWiFiClient(turnOnWifi);
-
+      const toggleGuestWifi = await this.client.toggleGuestWiFiClient(
+        turnOnWifi
+      );
       if (toggleGuestWifi) {
         return res.status(200).json(successResponse({ data: toggleGuestWifi }));
       } else {
